@@ -184,8 +184,15 @@ mouse support as a later mixin.
 
 ## 7. Next step
 
-Tier 0 is written (bundle, logic, HUD overlay, config, commands, CI). Its CI run
-must be green before Tier 1:
+Tier 0 is written **and green in CI** (`native` run on `c591873`: `apply` =
+7 injections + 2 modules in 4.6 s, `cargo check -p horizon-client` = 74 s,
+bundle job 2 min 53 s total; artifact `morinume` holds
+`morinume-0.1.0.hnmod` and the patched `game.rs`). Two things had to be fixed
+in the pinned game source first: the archive has documentation symlinks
+horizon-mixins refuses (CI deletes them; the launcher's own download does not
+include them), and the Android library's cfg'd `pub mod game` made every
+`Game<'_>` hook look like it was under a `cfg` (game commit `b1fb1e7d4`
+declares it through a macro).
 
 - `Morinume/native/mixins/morinume/horizon-mixin.toml` hooks `native_hud`,
   `native_tick`, `native_key`, `native_command`, `native_mods`,
@@ -194,8 +201,11 @@ must be green before Tier 1:
   `crates/horizon-client/src/game.rs`.
 - The menu is a keyboard-driven HUD overlay (Right Shift opens it). Mouse
   input needs cursor positions, which no hook point carries yet.
-- Watch `native.yml`; expect horizon-mixins diagnostics to fix (binding types,
-  duplicate module names, privacy). Record measured build time.
+- The hook points live in `game/native_hooks.rs`, so target ids are
+  `horizon_client::game::native_hooks::Game<'_>::<hook>` (not `game::Game`).
+- When the pin moves, update `compatibility.json` and `[compatibility]` in
+  `horizon-mixin.toml`; the workflow reads the json. Keep `hooks: 2` in the
+  packaged `horizon-native.json` (the bundle uses hook points only).
 
 Then **Tier 1**: real modules (FPS, keystrokes, coordinates), their options,
 HUD anchors, and the settings page. After that Tier 2 (profiles/waypoints) and
