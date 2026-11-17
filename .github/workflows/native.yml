@@ -70,6 +70,9 @@ jobs:
           mkdir -p work/src
           curl -fsSL "https://codeload.github.com/its-Kobi/Morizen/tar.gz/${{ steps.pins.outputs.horizon }}" \
             | tar xz -C work/src --strip-components=1
+          # horizon-mixins refuses symlinks (the launcher's own download leaves
+          # them out); the repo's are documentation links only.
+          find work/src -type l -print -delete
 
       - name: Apply the Morinume bundle
         run: |
