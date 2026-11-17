@@ -137,7 +137,7 @@ fn draw(
 }
 
 /// The HUD: the menu while it is open, else the enabled modules' panels.
-pub(crate) fn hud(game: &mut crate::game::Game<'_>, batch: &mut horizon_client::HudBatch) {
+pub(crate) fn hud(game: &mut crate::game::Game<'_>, batch: &mut horizon_client::hud::HudBatch) {
     if !game.native_on(morinume::ID) || !game.native_playing() {
         return;
     }

@@ -204,6 +204,7 @@ work; the pin moved to a game commit that carries the engine-side part.
   (reported on the Performance tab with its build time in µs).
 - Commands: `/morinume open|close|toggle <id>|search <text>|edit|perf|profile
   list|use|new|delete|waypoint list|add|del|track|save|list`.
+- Gotcha: hud's signature must spell horizon_client::hud::HudBatch (there is no re-export at horizon_client::HudBatch); CI run 44099221411 failed on exactly that.
 - Tier 4 engine side (game repo, part of the pin): `Text::plain_line` (HUD text
   without the serde_json map; host test prints `literal` vs `plain` timings,
   measured 23.4 ms -> 3.1 ms per 5000 lines in a debug build) and `HudBatch::fill`
