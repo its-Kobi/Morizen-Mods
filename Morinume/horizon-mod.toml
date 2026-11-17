@@ -6,4 +6,4 @@ authors = ["Morizen"]
 api = "0.1"
 side = "client"
 capabilities = ["storage", "ui", "command", "input"]
-experimental = ["input"]
+experimental = ["ui", "input"]
