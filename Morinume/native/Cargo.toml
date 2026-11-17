@@ -1,0 +1,16 @@
+[package]
+name = "morinume-native"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.95"
+license = "MIT OR Apache-2.0"
+description = "Morinume's menu logic, testable on its own and injected into the game"
+publish = false
+
+[lib]
+path = "morinume.rs"
+crate-type = ["rlib"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

@@ -6,6 +6,9 @@ menu. This file is written for an AI agent that has none of the prior context.
 Keep it up to date: **every time you change anything in this repository, edit
 this file in the same commit** (state, file map, dead ends, next step).
 
+The game repository has its own notes: `C:\Users\Brothers\Desktop\Morizen\agent.txt`
+(crates, build, test, mods rules). Read both.
+
 Last updated: 2026-11-17 (native Tier 0 started).
 
 ---
@@ -66,8 +69,10 @@ Layout today:
 | `Morinume/Cargo.toml`, `src/` | The WASM draft (registry, config, menu over `ui` widgets). Not runnable on current builds; reference only. |
 | `Morinume/target/horizon-mod/morinume.hmod` | Built by CI on tag; attached to release `v0.1.0`. Dead format, kept for history. |
 | `Morinume/Morinume_Logo.png`, `Morinume_yellow_icon_transparent.png` | The original Morinume logo (the only brand assets so far). |
+| `Morinume/native/` | The native bundle: `Cargo.toml` (pure logic testable on the host), `horizon-mixin.toml`, `morinume.rs`, `hooks.rs`, `hooks/` adapters. Tier 0 in progress. |
 | `.github/workflows/build.yml` | WASM-era CI: host tests, clippy, `cargo horizon-mod build`, `.hmod` artifact/release. To be replaced by a native-bundle workflow. |
 | `agent.txt` | This file. |
+| (game repo) `C:\Users\Brothers\Desktop\Morizen\agent.txt` | Notes for the game side of Morizen. |
 
 ## 3. How native mods work (what Morinume must become)
 
