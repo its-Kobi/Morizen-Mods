@@ -73,6 +73,9 @@ jobs:
           # horizon-mixins refuses symlinks (the launcher's own download leaves
           # them out); the repo's are documentation links only.
           find work/src -type l -print -delete
+          # The launcher writes this marker for an unpacked source archive; the
+          # tool otherwise asks git, which would answer with the mods checkout.
+          printf '%s\n' "${{ steps.pins.outputs.horizon }}" > work/src/.horizon-revision
 
       - name: Apply the Morinume bundle
         run: |
