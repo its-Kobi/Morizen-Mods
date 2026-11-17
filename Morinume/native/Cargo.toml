@@ -1,15 +1,15 @@
 [package]
 name = "morinume-native"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 rust-version = "1.95"
-license = "MIT OR Apache-2.0"
-description = "Morinume's menu logic, testable on its own and injected into the game"
-publish = false
+license = "MIT"
+description = "Morinume, Morizen's mods menu, as a native horizon-mixins bundle"
 
 [lib]
-path = "morinume.rs"
-crate-type = ["rlib"]
+# The same file is injected into the game as `crate::game::morinume`, so this
+# library keeps the pure logic testable on a host.
+path = "mixins/morinume/morinume.rs"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

@@ -1,0 +1,97 @@
+[mod]
+id = "morinume"
+version = "0.1.0"
+priority = 100
+
+[compatibility]
+horizon_revision = "1968778a09497a405fe2ccc6451ed17bc1aef794"
+
+# The pure logic: config, modules, registry, menu state and the paint list.
+[[module]]
+id = "logic"
+file = "crates/horizon-client/src/game.rs"
+name = "morinume"
+source = "morinume.rs"
+
+# The game glue: loads and saves the config, turns Paint into HUD shapes.
+[[module]]
+id = "glue"
+file = "crates/horizon-client/src/game.rs"
+name = "morinume_hooks"
+source = "hooks.rs"
+
+# The menu overlay, after Horizon's own extras.
+[[injection]]
+id = "hud"
+kind = "HEAD"
+target = "horizon_client::game::Game<'_>::native_hud"
+helper = "hook_hud.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "batch", ty = "&mut horizon_client::hud::HudBatch", value = "batch" },
+]
+
+# Modules tick.
+[[injection]]
+id = "tick"
+kind = "HEAD"
+target = "horizon_client::game::Game<'_>::native_tick"
+helper = "hook_tick.rs"
+bindings = [{ name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" }]
+
+# The menu key and the menu's keyboard navigation.
+[[injection]]
+id = "key"
+kind = "HEAD"
+target = "horizon_client::game::Game<'_>::native_key"
+helper = "hook_key.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "key", ty = "&str", value = "key" },
+  { name = "pressed", ty = "bool", value = "pressed" },
+]
+
+# `/morinume ...`.
+[[injection]]
+id = "command"
+kind = "HEAD"
+target = "horizon_client::game::Game<'_>::native_command"
+helper = "hook_command.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "command", ty = "&str", value = "command" },
+  { name = "ran", ty = "&mut bool", value = "ran" },
+]
+
+# The Options > Mods row, its key and its settings page.
+[[injection]]
+id = "mods"
+kind = "HEAD"
+target = "horizon_client::game::Game<'_>::native_mods"
+helper = "hook_mods.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "mods", ty = "&mut Vec<crate::game::native_hooks::NativeMod>", value = "mods" },
+]
+
+[[injection]]
+id = "settings"
+kind = "HEAD"
+target = "horizon_client::game::Game<'_>::native_settings"
+helper = "hook_settings.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "mod_id", ty = "&str", value = "mod_id" },
+  { name = "buttons", ty = "&mut Vec<String>", value = "buttons" },
+]
+
+[[injection]]
+id = "settings-click"
+kind = "HEAD"
+target = "horizon_client::game::Game<'_>::native_settings_click"
+helper = "hook_settings_click.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "mod_id", ty = "&str", value = "mod_id" },
+  { name = "button", ty = "usize", value = "button" },
+]

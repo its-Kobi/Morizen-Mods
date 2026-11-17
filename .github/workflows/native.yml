@@ -1,0 +1,107 @@
+name: native
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  logic:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Morinume/native
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Morinume/native
+
+      - name: Tests (host build of the same logic)
+        run: cargo test
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+  bundle:
+    needs: logic
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: System libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libudev-dev pkg-config zip
+
+      - name: Pins
+        id: pins
+        run: |
+          echo "horizon=$(jq -r .horizon_revision Morinume/native/compatibility.json)" >> "$GITHUB_OUTPUT"
+          echo "mixins=$(jq -r .horizon_mixins_revision Morinume/native/compatibility.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache horizon-mixins
+        uses: actions/cache@v4
+        with:
+          path: work/tools
+          key: horizon-mixins-${{ steps.pins.outputs.mixins }}
+
+      - name: Install horizon-mixins
+        run: |
+          if [ ! -x work/tools/bin/horizon-mixins ]; then
+            cargo install --locked --git https://github.com/horizon-rust/horizon-mixins \
+              --rev "${{ steps.pins.outputs.mixins }}" --root work/tools
+          fi
+
+      - name: Download the pinned game source
+        run: |
+          mkdir -p work/src
+          curl -fsSL "https://codeload.github.com/its-Kobi/Morizen/tar.gz/${{ steps.pins.outputs.horizon }}" \
+            | tar xz -C work/src --strip-components=1
+
+      - name: Apply the Morinume bundle
+        run: |
+          work/tools/bin/horizon-mixins apply \
+            --workspace work/src \
+            --mods Morinume/native/mixins \
+            --out work/modded
+
+      - name: Check the game
+        working-directory: work/modded
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/work/target
+        run: cargo check --locked -p horizon-client
+
+      - name: Package the .hnmod
+        run: |
+          mkdir -p art work/pack/mixins
+          cp -r Morinume/native/mixins/morinume work/pack/mixins/morinume
+          cat > work/pack/horizon-native.json <<JSON
+          {"schema":1,"id":"morinume","version":"0.1.0","game":"26.3","horizon":"${{ steps.pins.outputs.horizon }}","mixins":"${{ steps.pins.outputs.mixins }}","hooks":2}
+          JSON
+          (cd work/pack && zip -qr "$GITHUB_WORKSPACE/art/morinume-0.1.0.hnmod" .)
+          cp work/modded/crates/horizon-client/src/game.rs art/game.rs
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: morinume
+          path: art/
+          if-no-files-found: error
+
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: art/morinume-0.1.0.hnmod

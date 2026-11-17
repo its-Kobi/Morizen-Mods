@@ -9,7 +9,7 @@ this file in the same commit** (state, file map, dead ends, next step).
 The game repository has its own notes: `C:\Users\Brothers\Desktop\Morizen\agent.txt`
 (crates, build, test, mods rules). Read both.
 
-Last updated: 2026-11-17 (native Tier 0 started).
+Last updated: 2026-11-17 (native Tier 0 written; CI checking it).
 
 ---
 
@@ -69,8 +69,8 @@ Layout today:
 | `Morinume/Cargo.toml`, `src/` | The WASM draft (registry, config, menu over `ui` widgets). Not runnable on current builds; reference only. |
 | `Morinume/target/horizon-mod/morinume.hmod` | Built by CI on tag; attached to release `v0.1.0`. Dead format, kept for history. |
 | `Morinume/Morinume_Logo.png`, `Morinume_yellow_icon_transparent.png` | The original Morinume logo (the only brand assets so far). |
-| `Morinume/native/` | The native bundle: `Cargo.toml` (pure logic testable on the host), `horizon-mixin.toml`, `morinume.rs`, `hooks.rs`, `hooks/` adapters. Tier 0 in progress. |
-| `.github/workflows/build.yml` | WASM-era CI: host tests, clippy, `cargo horizon-mod build`, `.hmod` artifact/release. To be replaced by a native-bundle workflow. |
+| `Morinume/native/` | The native bundle: `Cargo.toml` (pure logic testable on the host), `compatibility.json` (the pinned game and horizon-mixins commits), `mixins/morinume/` (`horizon-mixin.toml`, `morinume.rs` logic, `hooks.rs` game glue, `hook_*.rs` adapters). Tier 0 written. |
+| `.github/workflows/native.yml` | Native CI: host tests + clippy, then installs horizon-mixins at the pinned revision, downloads the pinned game source, `apply`, `cargo check -p horizon-client`, packages `morinume-0.1.0.hnmod`. The old WASM workflow was deleted. |
 | `agent.txt` | This file. |
 | (game repo) `C:\Users\Brothers\Desktop\Morizen\agent.txt` | Notes for the game side of Morizen. |
 
@@ -184,20 +184,22 @@ mouse support as a later mixin.
 
 ## 7. Next step
 
-Build the **native Tier 0 bundle** for Morinume:
+Tier 0 is written (bundle, logic, HUD overlay, config, commands, CI). Its CI run
+must be green before Tier 1:
 
-1. `Morinume/native/` (or a top-level `bundle/`): `horizon-mixin.toml` with
-   `[mod] id = "morinume"`, HEAD hooks on `native_frame`, `native_tick`,
-   `native_hud`, `native_key`, `native_command`, `native_mods`,
-   `native_settings`, `native_settings_click`.
-2. A core module (pure logic, unit-tested on the host): module registry,
-   settings, profiles, HUD anchors, config persisted through
-   `native_setting`/`native_set_setting`.
-3. A HUD painter: dark panel with the top bar, tabs, filter chips, a 3-column,
-   paged card grid (icon = coloured block/glyph made of fills until item icons
-   are available), green/red ENABLED bar, keyboard navigation (arrows, Enter,
-   Esc, Tab), search via `/morinume search`, profiles via `/morinume profile`.
-4. CI: download the game source at the fork's commit, install horizon-mixins,
-   `apply` + `cargo check -p horizon-client`, and publish the bundle. Record
-   measured build time and the exact commit pinned.
+- `Morinume/native/mixins/morinume/horizon-mixin.toml` hooks `native_hud`,
+  `native_tick`, `native_key`, `native_command`, `native_mods`,
+  `native_settings`, `native_settings_click`; two support modules
+  (`morinume` logic, `morinume_hooks` glue) are injected into
+  `crates/horizon-client/src/game.rs`.
+- The menu is a keyboard-driven HUD overlay (Right Shift opens it). Mouse
+  input needs cursor positions, which no hook point carries yet.
+- Watch `native.yml`; expect horizon-mixins diagnostics to fix (binding types,
+  duplicate module names, privacy). Record measured build time.
+
+Then **Tier 1**: real modules (FPS, keystrokes, coordinates), their options,
+HUD anchors, and the settings page. After that Tier 2 (profiles/waypoints) and
+Tier 3 (performance panel), then Tier 4's real engine FPS work in the game
+crate, with numbers.
+
 5. Update this file in the same commit.
