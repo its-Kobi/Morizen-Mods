@@ -95,9 +95,9 @@ jobs:
           mkdir -p art work/pack/mixins
           cp -r Morinume/native/mixins/morinume work/pack/mixins/morinume
           cat > work/pack/horizon-native.json <<JSON
-          {"schema":1,"id":"morinume","version":"0.1.0","game":"26.3","horizon":"${{ steps.pins.outputs.horizon }}","mixins":"${{ steps.pins.outputs.mixins }}","hooks":2}
+          {"schema":1,"id":"morinume","version":"0.2.0","game":"26.3","horizon":"${{ steps.pins.outputs.horizon }}","mixins":"${{ steps.pins.outputs.mixins }}","hooks":2}
           JSON
-          (cd work/pack && zip -qr "$GITHUB_WORKSPACE/art/morinume-0.1.0.hnmod" .)
+          (cd work/pack && zip -qr "$GITHUB_WORKSPACE/art/morinume-0.2.0.hnmod" .)
           cp work/modded/crates/horizon-client/src/game.rs art/game.rs
 
       - uses: actions/upload-artifact@v4
@@ -110,4 +110,4 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: art/morinume-0.1.0.hnmod
+          files: art/morinume-0.2.0.hnmod

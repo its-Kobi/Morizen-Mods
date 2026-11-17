@@ -9,7 +9,7 @@ this file in the same commit** (state, file map, dead ends, next step).
 The game repository has its own notes: `C:\Users\Brothers\Desktop\Morizen\agent.txt`
 (crates, build, test, mods rules). Read both.
 
-Last updated: 2026-11-17 (native Tier 0 written; CI checking it).
+Last updated: 2026-11-17 (native 0.2.0: Tiers 1-4 written; CI building it).
 
 ---
 
@@ -182,34 +182,43 @@ mouse support as a later mixin.
   `C:\Users\Brothers\Desktop\Morizen Mods`.
 - `gh` is not installed; use the REST API with the token.
 
-## 7. Next step
+## 7. State: 0.2.0 (Tiers 0-4 in one release)
 
-Tier 0 is written **and green in CI** (`native` run on `c591873`: `apply` =
-7 injections + 2 modules in 4.6 s, `cargo check -p horizon-client` = 74 s,
-bundle job 2 min 53 s total; artifact `morinume` holds
-`morinume-0.1.0.hnmod` and the patched `game.rs`). Two things had to be fixed
-in the pinned game source first: the archive has documentation symlinks
-horizon-mixins refuses (CI deletes them; the launcher's own download does not
-include them), and the Android library's cfg'd `pub mod game` made every
-`Game<'_>` hook look like it was under a `cfg` (game commit `b1fb1e7d4`
-declares it through a macro).
+Tier 0 was green in CI on `c591873` (7 injections + 2 support modules, `cargo
+check -p horizon-client` 74 s). 0.2.0 adds Tier 1-3 (real modules, options,
+HUD anchors, profiles, waypoints, performance tab) and Tier 4's measured FPS
+work; the pin moved to a game commit that carries the engine-side part.
 
-- `Morinume/native/mixins/morinume/horizon-mixin.toml` hooks `native_hud`,
-  `native_tick`, `native_key`, `native_command`, `native_mods`,
-  `native_settings`, `native_settings_click`; two support modules
-  (`morinume` logic, `morinume_hooks` glue) are injected into
-  `crates/horizon-client/src/game.rs`.
-- The menu is a keyboard-driven HUD overlay (Right Shift opens it). Mouse
-  input needs cursor positions, which no hook point carries yet.
-- The hook points live in `game/native_hooks.rs`, so target ids are
-  `horizon_client::game::native_hooks::Game<'_>::<hook>` (not `game::Game`).
-- When the pin moves, update `compatibility.json` and `[compatibility]` in
-  `horizon-mixin.toml`; the workflow reads the json. Keep `hooks: 2` in the
-  packaged `horizon-native.json` (the bundle uses hook points only).
-
-Then **Tier 1**: real modules (FPS, keystrokes, coordinates), their options,
-HUD anchors, and the settings page. After that Tier 2 (profiles/waypoints) and
-Tier 3 (performance panel), then Tier 4's real engine FPS work in the game
-crate, with numbers.
+- `morinume.rs` (pure logic, host-tested by `cd Morinume/native && cargo test`):
+  `Config` (enabled/settings/profiles/active_profile/hud/waypoints/tracked),
+  `Registry`, `Module` trait (`hud`, `chips`, `settings`, `status`), the seven
+  modules (`fps`, `cps`, `keystrokes`, `coords`, `playtime`, `tracker`,
+  `performance`), the `Menu` (4 tabs, filters, search, options pages, HUD
+  layout editing) and `paint`/`paint_hud` returning `Paint` rects and text.
+  23 tests; `cargo clippy --all-targets -- -D warnings` clean.
+- `hooks.rs` (glue): loads/saves the config as one JSON string in
+  `native_setting("morinume","config")`, builds `HudInfo` from
+  `native_frame_rate`/`native_clicks`/`native_mapping`/`native_player`/ticks,
+  routes keys/commands, lists every module on the Options > Mods settings page,
+  culls off-screen paints, and caches the menu paint until something changes
+  (reported on the Performance tab with its build time in µs).
+- Commands: `/morinume open|close|toggle <id>|search <text>|edit|perf|profile
+  list|use|new|delete|waypoint list|add|del|track|save|list`.
+- Tier 4 engine side (game repo, part of the pin): `Text::plain_line` (HUD text
+  without the serde_json map; host test prints `literal` vs `plain` timings,
+  measured 23.4 ms -> 3.1 ms per 5000 lines in a debug build) and `HudBatch::fill`
+  dropping zero-size/transparent boxes before they reach the GPU. This is a
+  first measured optimisation, not a renderer rewrite; deeper meshing/culling
+  work is the next FPS step.
+- Release: tag `v0.2.0` on this repo; `native.yml` attaches
+  `morinume-0.2.0.hnmod` to it. The bundle pins the game commit in
+  `Morinume/native/compatibility.json`; moving the pin means updating that file
+  and `[compatibility]` in `horizon-mixin.toml`, and keeping `hooks: 2`
+  (`horizon-native.json`) since only stable hook points are used.
+- Mouse-driven menu: no hook point carries cursor positions; that needs direct
+  mixins over the game's screen/input code, so it stays keyboard-driven for now
+  (arrows/Enter/O/Tab/H/Delete/[ ]/Esc).
+- Next: play-test the menu in a native build, then extend the engine side of
+  FPS BOOST with measured numbers from `horizon-bench`.
 
 5. Update this file in the same commit.

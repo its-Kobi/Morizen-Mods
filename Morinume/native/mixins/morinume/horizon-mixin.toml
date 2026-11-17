@@ -1,10 +1,10 @@
 [mod]
 id = "morinume"
-version = "0.1.0"
+version = "0.2.0"
 priority = 100
 
 [compatibility]
-horizon_revision = "b1fb1e7d437874ac237b295b0c6cdc4b48b671b0"
+horizon_revision = "4b1772da29e70c2d69261401b98243cd7e11d2db"
 
 # The pure logic: config, modules, registry, menu state and the paint list.
 [[module]]

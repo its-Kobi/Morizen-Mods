@@ -1,20 +1,26 @@
 // Morinume's game glue (injected as `crate::game::morinume_hooks`).
 //
 // The pure logic lives in `morinume`: this module loads and saves its config
-// as one JSON string, routes the hook points to it and paints the menu. The
-// menu is a HUD overlay with keyboard navigation: native hook points carry no
-// cursor position yet.
+// as one JSON string, gathers `HudInfo` through the native hook helpers, and
+// paints the menu and the HUD panels. The menu is a HUD overlay with keyboard
+// navigation: native hook points carry no cursor position yet.
 
 use std::sync::{Mutex, OnceLock};
+use std::time::Instant;
 
-use crate::game::morinume::{self, Config, Menu, Paint, Registry};
+use crate::game::morinume::{self, Config, HudInfo, Keys, Menu, Paint, Registry};
 
-/// What survives between hook calls: the modules, their config and the menu.
+/// What survives between hook calls: the modules, their config, the menu and
+/// the last menu paint (rebuilt only when something visible changed).
 struct State {
     registry: Registry,
     menu: Menu,
     loaded: bool,
     ticks: u64,
+    /// The menu or the config changed since the cached paint.
+    dirty: bool,
+    /// The cached menu paint and the screen it was laid out for.
+    cache: Option<(f32, f32, Vec<Paint>)>,
 }
 
 fn state() -> &'static Mutex<State> {
@@ -25,6 +31,8 @@ fn state() -> &'static Mutex<State> {
             menu: Menu::default(),
             loaded: false,
             ticks: 0,
+            dirty: true,
+            cache: None,
         })
     })
 }
@@ -45,36 +53,124 @@ fn load(game: &crate::game::Game<'_>, st: &mut State) {
         .map(|text| Config::from_json(&text))
         .unwrap_or_default();
     st.registry = Registry::new(config);
+    st.dirty = true;
 }
 
 fn save(game: &crate::game::Game<'_>, st: &State) {
     game.native_set_setting(morinume::ID, "config", &st.registry.config.to_json());
 }
 
-/// The HUD: the menu overlay while it is open.
-pub(crate) fn hud(game: &mut crate::game::Game<'_>, batch: &mut horizon_client::hud::HudBatch) {
-    if !game.native_on(morinume::ID) {
-        return;
+/// Whether a vanilla mapping (`key.forward`, `key.attack`...) is held.
+fn held(game: &mut crate::game::Game<'_>, name: &str) -> bool {
+    game.native_mapping(name)
+        .is_some_and(|(down, _)| down)
+}
+
+/// What the HUD modules may show this frame, from the game's own counters.
+fn gather(game: &mut crate::game::Game<'_>, st: &State) -> HudInfo {
+    let (fps, slowest, low) = game.native_frame_rate();
+    let (attack, _use) = game.native_clicks();
+    let keys = Keys {
+        forward: held(game, "key.forward"),
+        back: held(game, "key.back"),
+        left: held(game, "key.left"),
+        right: held(game, "key.right"),
+        jump: held(game, "key.jump"),
+        sneak: held(game, "key.sneak"),
+        sprint: held(game, "key.sprint"),
+        attack: held(game, "key.attack"),
+        use_item: held(game, "key.use"),
+    };
+    let mut info = HudInfo {
+        fps,
+        slowest,
+        low,
+        playtime: st.ticks,
+        cps: attack,
+        keys,
+        menu_open: st.menu.open,
+        ..HudInfo::default()
+    };
+    if let Some(player) = game.native_player() {
+        info.x = player.x;
+        info.y = player.y;
+        info.z = player.z;
+        info.yaw = player.yaw;
+        info.dimension = player.dimension.to_string();
     }
-    let mut guard = lock();
-    let st = &mut *guard;
-    load(game, st);
-    if !st.menu.open {
-        return;
-    }
-    let paints = st.menu.paint(&st.registry, batch.width, batch.height);
+    info
+}
+
+/// A paint outside the `w` x `h` screen is skipped before it reaches the GPU.
+fn on_screen(paint: &Paint, w: f32, h: f32) -> bool {
+    let (x, y, pw, ph) = match paint {
+        Paint::Rect { x, y, w, h, .. } => (*x, *y, *w, *h),
+        Paint::Text { x, y, .. } => (*x, *y, 1.0, 1.0),
+    };
+    pw > 0.0 && ph > 0.0 && x < w && y < h && x + pw > 0.0 && y + ph > 0.0
+}
+
+fn draw(
+    game: &crate::game::Game<'_>,
+    batch: &mut horizon_client::hud::HudBatch,
+    paints: &[Paint],
+) -> u32 {
+    let (w, h) = (batch.width, batch.height);
+    let mut culled = 0;
     for paint in paints {
+        if !on_screen(paint, w, h) {
+            culled += 1;
+            continue;
+        }
         match paint {
-            Paint::Rect { x, y, w, h, argb } => game.native_fill(batch, [x, y, w, h], argb),
+            Paint::Rect { x, y, w, h, argb } => game.native_fill(batch, [*x, *y, *w, *h], *argb),
             Paint::Text {
                 text,
                 x,
                 y,
                 rgb,
                 shadow,
-            } => game.native_text(batch, &text, [x, y], rgb, shadow),
+            } => game.native_text(batch, text, [*x, *y], *rgb, *shadow),
         }
     }
+    culled
+}
+
+/// The HUD: the menu while it is open, else the enabled modules' panels.
+pub(crate) fn hud(game: &mut crate::game::Game<'_>, batch: &mut horizon_client::HudBatch) {
+    if !game.native_on(morinume::ID) || !game.native_playing() {
+        return;
+    }
+    let mut guard = lock();
+    let st = &mut *guard;
+    load(game, st);
+    let (w, h) = (batch.width, batch.height);
+    if st.menu.open {
+        let stale = st.dirty
+            || st
+                .cache
+                .as_ref()
+                .is_none_or(|(cw, ch, _)| *cw != w || *ch != h);
+        if stale {
+            let started = Instant::now();
+            let paints = st.menu.paint(&st.registry, w, h);
+            st.menu.paint_us = started.elapsed().as_micros().min(u128::from(u32::MAX)) as u32;
+            st.menu.paint_shapes = paints.len() as u32;
+            st.cache = Some((w, h, paints));
+            st.dirty = false;
+        }
+        let culled = match st.cache.as_ref() {
+            Some((_, _, paints)) => draw(game, batch, paints),
+            None => 0,
+        };
+        st.menu.paint_culled = culled;
+        return;
+    }
+    st.cache = None;
+    st.dirty = true;
+    let info = gather(game, st);
+    let paints = morinume::paint_hud(&st.registry, &info, w, h);
+    st.menu.paint_culled = draw(game, batch, &paints);
 }
 
 /// Once a tick: the enabled modules tick.
@@ -100,6 +196,7 @@ pub(crate) fn key(game: &mut crate::game::Game<'_>, key: &str, pressed: bool) {
     load(game, st);
     if key == menu_key {
         st.menu.toggle();
+        st.dirty = true;
         return;
     }
     if !st.menu.open {
@@ -107,6 +204,9 @@ pub(crate) fn key(game: &mut crate::game::Game<'_>, key: &str, pressed: bool) {
     }
     if st.menu.key(&mut st.registry, key) {
         save(game, st);
+        st.dirty = true;
+    } else {
+        st.dirty = true;
     }
 }
 
@@ -124,10 +224,14 @@ pub(crate) fn command(game: &mut crate::game::Game<'_>, command: &str, ran: &mut
         game.native_chat("Morinume is turned off in Options > Mods");
         return;
     }
+    let at = game
+        .native_player()
+        .map(|p| (p.x, p.y, p.z, p.dimension.to_string()));
     let mut guard = lock();
     let st = &mut *guard;
     load(game, st);
-    match st.menu.command(&mut st.registry, rest.trim()) {
+    st.dirty = true;
+    match st.menu.command(&mut st.registry, rest.trim(), at) {
         Ok(Some(feedback)) => {
             save(game, st);
             game.native_chat(&feedback);
@@ -155,7 +259,7 @@ pub(crate) fn mods(
     });
 }
 
-/// The buttons of Morinume's settings page.
+/// The buttons of Morinume's settings page: every module, then the profile.
 pub(crate) fn settings(
     game: &mut crate::game::Game<'_>,
     mod_id: &str,
@@ -167,19 +271,17 @@ pub(crate) fn settings(
     let mut guard = lock();
     let st = &mut *guard;
     load(game, st);
-    let demo = st
-        .registry
-        .modules
-        .iter()
-        .position(|m| m.id() == "demo")
-        .map(|i| st.registry.enabled(i));
-    let profile = st.registry.config.active_profile.clone();
-    buttons.push(format!("Profile: {profile}"));
-    buttons.push(match demo {
-        Some(true) => "Demo Module: ON".to_string(),
-        Some(false) => "Demo Module: OFF".to_string(),
-        None => "Demo Module: missing".to_string(),
-    });
+    for i in 0..st.registry.modules.len() {
+        buttons.push(format!(
+            "{}: {}",
+            st.registry.modules[i].name(),
+            if st.registry.enabled(i) { "ON" } else { "OFF" }
+        ));
+    }
+    buttons.push(format!(
+        "Save profile as new ({})",
+        st.registry.config.active_profile
+    ));
 }
 
 /// A click on one of those buttons.
@@ -190,10 +292,13 @@ pub(crate) fn settings_click(game: &mut crate::game::Game<'_>, mod_id: &str, but
     let mut guard = lock();
     let st = &mut *guard;
     load(game, st);
-    if button == 1
-        && let Some(index) = st.registry.modules.iter().position(|m| m.id() == "demo")
-    {
-        st.registry.toggle(index);
-        save(game, st);
+    st.dirty = true;
+    if button < st.registry.modules.len() {
+        st.registry.toggle(button);
+    } else {
+        if let Some(name) = st.registry.config.save_as_new() {
+            game.native_chat(&format!("Morinume: saved {name}"));
+        }
     }
+    save(game, st);
 }
