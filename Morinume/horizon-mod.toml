@@ -1,0 +1,9 @@
+id = "morinume"
+name = "Morinume"
+version = "0.1.0"
+description = "Morizen's mods menu: one grid of cards for every mod, its options and its on/off switch. Right Shift or /morinume."
+authors = ["Morizen"]
+api = "0.1"
+side = "client"
+capabilities = ["storage", "ui", "command", "input"]
+experimental = ["input"]
