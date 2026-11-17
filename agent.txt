@@ -184,6 +184,10 @@ mouse support as a later mixin.
 
 ## 7. State: 0.2.0 (Tiers 0-4 in one release)
 
+Green: `native` run 44099923351 on `c10c7d4` (apply 7 injections + 2 modules,
+`cargo check -p horizon-client` 60 s, bundle job ok); tag `v0.2.0` cut from it,
+which re-runs the workflow to attach `morinume-0.2.0.hnmod` to the release. (Tiers 0-4 in one release)
+
 Tier 0 was green in CI on `c591873` (7 injections + 2 support modules, `cargo
 check -p horizon-client` 74 s). 0.2.0 adds Tier 1-3 (real modules, options,
 HUD anchors, profiles, waypoints, performance tab) and Tier 4's measured FPS
