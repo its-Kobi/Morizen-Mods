@@ -20,11 +20,12 @@ file = "crates/horizon-client/src/game.rs"
 name = "morinume_hooks"
 source = "hooks.rs"
 
-# The menu overlay, after Horizon's own extras.
+# The menu overlay, after Horizon's own extras. The hook points live in
+# game/native_hooks.rs, so their module is part of the target id.
 [[injection]]
 id = "hud"
 kind = "HEAD"
-target = "horizon_client::game::Game<'_>::native_hud"
+target = "horizon_client::game::native_hooks::Game<'_>::native_hud"
 helper = "hook_hud.rs"
 bindings = [
   { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
@@ -35,7 +36,7 @@ bindings = [
 [[injection]]
 id = "tick"
 kind = "HEAD"
-target = "horizon_client::game::Game<'_>::native_tick"
+target = "horizon_client::game::native_hooks::Game<'_>::native_tick"
 helper = "hook_tick.rs"
 bindings = [{ name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" }]
 
@@ -43,7 +44,7 @@ bindings = [{ name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *s
 [[injection]]
 id = "key"
 kind = "HEAD"
-target = "horizon_client::game::Game<'_>::native_key"
+target = "horizon_client::game::native_hooks::Game<'_>::native_key"
 helper = "hook_key.rs"
 bindings = [
   { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
@@ -55,7 +56,7 @@ bindings = [
 [[injection]]
 id = "command"
 kind = "HEAD"
-target = "horizon_client::game::Game<'_>::native_command"
+target = "horizon_client::game::native_hooks::Game<'_>::native_command"
 helper = "hook_command.rs"
 bindings = [
   { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
@@ -67,7 +68,7 @@ bindings = [
 [[injection]]
 id = "mods"
 kind = "HEAD"
-target = "horizon_client::game::Game<'_>::native_mods"
+target = "horizon_client::game::native_hooks::Game<'_>::native_mods"
 helper = "hook_mods.rs"
 bindings = [
   { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
@@ -77,7 +78,7 @@ bindings = [
 [[injection]]
 id = "settings"
 kind = "HEAD"
-target = "horizon_client::game::Game<'_>::native_settings"
+target = "horizon_client::game::native_hooks::Game<'_>::native_settings"
 helper = "hook_settings.rs"
 bindings = [
   { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
@@ -88,7 +89,7 @@ bindings = [
 [[injection]]
 id = "settings-click"
 kind = "HEAD"
-target = "horizon_client::game::Game<'_>::native_settings_click"
+target = "horizon_client::game::native_hooks::Game<'_>::native_settings_click"
 helper = "hook_settings_click.rs"
 bindings = [
   { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
