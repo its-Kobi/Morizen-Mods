@@ -1,0 +1,198 @@
+# AGENT NOTES — read this first
+
+You are picking up work on **Morizen**, a fork of Horizon (Minecraft: Java
+Edition 26.3 rewritten in Rust), and on **Morinume**, Morizen's official mods
+menu. This file is written for an AI agent that has none of the prior context.
+Keep it up to date: **every time you change anything in this repository, edit
+this file in the same commit** (state, file map, dead ends, next step).
+
+Last updated: 2026-11-17 (native Tier 0 started).
+
+---
+
+## 1. The product
+
+**Morizen** is a fork of [Horizon](https://github.com/horizon-rust/horizon)
+kept at `https://github.com/its-Kobi/Morizen` (branch `main`, public). Horizon
+is a clean-room Rust + wgpu reimplementation of Minecraft Java 26.3: real
+vanilla worldgen, redstone, mobs, saves, LAN and dedicated servers, one binary
+per platform. Morizen adds its own launcher skin, design tokens, Android build,
+auto-update and a phone performance preset.
+
+Nothing Mojang ships may be committed (game jars, assets, decompiled source,
+`.local/` resources). Guides live in the game repo:
+`CONTRIBUTING.md`, `AGENTS.md`, `docs/architecture.md`, `docs/mods.md`,
+`docs/native-mods.md`, `docs/parity-workflow.md`.
+
+### Story so far (the parts that matter here)
+
+- **v1.0.4** of the launcher shipped: Android launcher restyled with
+  `horizon_theme::BLOCKS_DARK`, automatic update check/download/install
+  (`crates/morizen-android/src/update.rs`, `install.rs`), Android first-launch
+  preset (`options_file.rs` / `settings.rs` `mobile_preset`,
+  `graphics.rs` resolution scale 75 on Android). Releases are cut from
+  `its-Kobi/Morizen` GitHub Actions (APK, Windows zip, Linux tar.gz,
+  `SHA256SUMS` + `.sig`). The update checker scans
+  `releases?per_page=30` because GitHub's `latest` sits on the
+  `release-launcher` tag.
+- **Morinume** is the next product: a Lunar-Client-style mods menu for Morizen,
+  with the mods themselves to follow (HUD, input/camera, visual/QoL, and a real
+  engine-level FPS BOOST). It must be **original**: own logo, name, icons; the
+  Lunar layout idea only, never its assets.
+- **The WebAssembly dead end (important):** Morinume 0.1.0 was first written
+  as a WASM mod (`.hmod`, `horizon-mod-sdk`, `ui`/`storage`/`input`
+  capabilities) and released at
+  `https://github.com/its-Kobi/Morizen-Mods/releases/tag/v0.1.0`. **It cannot
+  run on current Morizen builds.** `crates/horizon-client/src/game/mods.rs`
+  marks every package that contains a `mod.wasm` as
+  `ON (Stopped) — "Doesn't run any more: needs a native port"`; the game no
+  longer instantiates the WASM runtime for code mods. Only **native mods**
+  (mixin bundles compiled into the game) and content mods run.
+- Therefore **Morinume is being rebuilt as a native mixin bundle** (Tier 0 in
+  progress). The WASM source is kept as a design/architecture draft; its
+  registry, config and menu model carry over.
+
+## 2. This repository
+
+`https://github.com/its-Kobi/Morizen-Mods` — builds and releases only through
+GitHub Actions. Local builds are only for a quick compile check and their
+`target/` must be deleted afterwards (the owner does not want the device used
+for builds).
+
+Layout today:
+
+| Path | What |
+|---|---|
+| `Morinume/Cargo.toml`, `src/` | The WASM draft (registry, config, menu over `ui` widgets). Not runnable on current builds; reference only. |
+| `Morinume/target/horizon-mod/morinume.hmod` | Built by CI on tag; attached to release `v0.1.0`. Dead format, kept for history. |
+| `Morinume/Morinume_Logo.png`, `Morinume_yellow_icon_transparent.png` | The original Morinume logo (the only brand assets so far). |
+| `.github/workflows/build.yml` | WASM-era CI: host tests, clippy, `cargo horizon-mod build`, `.hmod` artifact/release. To be replaced by a native-bundle workflow. |
+| `agent.txt` | This file. |
+
+## 3. How native mods work (what Morinume must become)
+
+A native mod is a **mixin bundle**: `horizon-mixin.toml` plus helper `.rs`
+files, applied to the game's Rust source by
+[horizon-mixins](https://github.com/horizon-rust/horizon-mixins) before
+compiling the game. Helpers are compiled *inside* the target function, so they
+can reach private fields. Injection kinds: `HEAD` (and cancellable HEAD),
+`BEFORE_CALL`, `AFTER_CALL`, `AFTER_ASSIGN`, `MODIFY_EXPRESSION_VALUE`,
+`RETURN`, `MODIFY_ARG(S)`, `MODIFY_CONSTANT`, `MODIFY_VARIABLE`,
+`WRAP_OPERATION`, `OVERWRITE`.
+
+The launcher (`horizon-launcher native-build <folder> --trust-native-code`)
+downloads Rust + horizon-mixins + the pinned game source, applies the bundles,
+and compiles a private build of the game. The player turns native mods on in
+Settings → Game → Native mods, sees a red warning, and installs per instance.
+Mods read/write settings through `native_setting` / `native_set_setting` under
+`horizon-mods/.horizon-mod-data/<id>/` — the same folder WebAssembly mods of
+the same id used, so old settings carry over.
+
+### The stable hook points (game `crates/horizon-client/src/game/native_hooks.rs`)
+
+`native_frame(elapsed)`, `native_tick()`, `native_hud(batch, corners)` (draw
+with `native_fill`, `native_text`, place boxes with `corners.place`, skip taken
+corners via `native_corner_shown`), `native_key(key, pressed)` (keys on any
+screen, mouse buttons while playing, no repeats), `native_wheel(steps,
+claimed)`, `native_command(command, ran)`, `native_zoom`, `native_minimap`,
+`native_mods(list)`, `native_settings(mod_id, buttons)`,
+`native_settings_click(mod_id, button)`, `native_panel_event(mod_id, event)`.
+
+Helpers available to a mod: `native_on(id)`, `native_playing()`,
+`native_window()`, `native_corner_shown`, `native_text_width`, `native_fill`,
+`native_text`, `native_player`, `native_frame_rate`, `native_clicks`,
+`native_mapping`, `native_mod_key`, `native_chat`, `native_data_dir`,
+`native_setting`, `native_set_setting`, `native_panel_items`,
+`native_panel_recipes`, `native_recipes`, `native_known_recipes`,
+`native_place_recipe`, `native_give`. `NATIVE_HOOKS_API` is currently `2`;
+each addition raises it.
+
+**Limits that shape the UI:** there is no hook that opens a custom screen, and
+no cursor position / mouse-click hook on screens (`native_key` only sees keys
+everywhere and mouse buttons *while playing*), and the HUD drawing surface has
+fills and text but no item icons. So a native menu drawn through hook points
+alone is a HUD overlay with keyboard navigation; a mouse-driven, freely painted
+grid needs mixins that patch the game's screen/input code directly
+(higher risk, pin a game commit). Tier 0 targets the hook-point path, with
+mouse support as a later mixin.
+
+## 4. Morinume design (do not drift)
+
+- Dark, flat, clean. Opens with Right Shift (rebindable) and from a MODS button
+  on the main menu.
+- Top bar: logo + `MORINUME`, tabs `MODS / SETTINGS / WAYPOINTS`, close `X`.
+- Left sidebar: profiles (Default + user profiles) with edit pencils,
+  `SAVE AS NEW PROFILE`, `EDIT HUD LAYOUT`.
+- Filter row: `ALL / NEW / HUD / SERVER / MECHANIC` chips (active = blue),
+  grid/sort toggle, search box.
+- Mod grid: 3 columns of rounded dark cards; each has an icon, the mod name,
+  `OPTIONS` + gear, and a full-width green `ENABLED` / red `DISABLED` bar that
+  toggles on click.
+- `SETTINGS`: sub-tabs `GENERAL / PERFORMANCE / CONTROLS`, two columns of
+  ON/OFF rows under section headings, search box.
+- `WAYPOINTS`: simple list (later tier).
+- Letter-spaced UPPERCASE for buttons and tabs, normal case for mod names.
+- One module interface and one card component; no per-mod copy-paste.
+
+### Tiers
+
+0. Foundation: menu, card grid, module interface (name, category, enabled,
+   settings, on_enable/on_disable/on_tick/on_render), HUD anchors, JSON-ish
+   config (toggles, settings, HUD positions, profiles), one dummy module.
+1. HUD: Coordinates, FPS, CPS, Ping, Keystrokes, Armor Status, Day Counter.
+2. Input/camera: Toggle Sneak/Sprint, Zoom, Snaplook, Free Cam, Fullbright.
+3. Visual/QoL: Particle Changer, Motion Blur, Nick Hider, Scrollable Tooltips,
+   Tab Editor, Chat tweaks.
+4. FPS BOOST: **not a settings preset**. Real engine work in the game crate
+   (meshing, culling, lighting, upload scheduling, entity/block-entity
+   batching, GPU side), measured with the bench and the FPS/frame-time readout;
+   the mod only toggles the optimised paths and shows the measured gain.
+5. Later: Waypoints, cosmetics, replay.
+
+## 5. Working rules for agents
+
+- One tier at a time; stop and report in **≤5 lines** after each task (what
+  changed, files, how to test). The owner reads Arabic/English; reply in the
+  language they used.
+- Keep edits small and targeted; never rewrite a file to change one line.
+  Do not re-read the whole game repo for each task.
+- **Never build on the owner's device.** Push to GitHub and let Actions build;
+  if you must compile locally, delete `target/` and any generated lockfile
+  afterwards.
+- Everything players run is Rust. Python only for dev tooling.
+- Original assets only. No Lunar Client art, names or icons.
+- Commit attribution: end commits with
+  `Co-Authored-By: DeepSeek V4.1 Flash Free <noreply@deepseek.com>`.
+- The game repo has its own `AGENTS.md` rules (no Mojang files, scratch homes,
+  PR etiquette); follow them when touching `its-Kobi/Morizen`.
+
+## 6. Environment facts
+
+- Owner machine: Windows, `x86_64-pc-windows-gnu` Rust 1.99.1, no Visual
+  Studio; `cargo test` / `cargo clippy` work for host code, the game itself does
+  not link locally without patching `crates/horizon-client/build.rs` (icon
+  tooling panics). GitHub token comes from
+  `git credential fill` (`protocol=https`, `host=github.com`).
+- The game checkout is at `C:\Users\Brothers\Desktop\Morizen`; the mod repo at
+  `C:\Users\Brothers\Desktop\Morizen Mods`.
+- `gh` is not installed; use the REST API with the token.
+
+## 7. Next step
+
+Build the **native Tier 0 bundle** for Morinume:
+
+1. `Morinume/native/` (or a top-level `bundle/`): `horizon-mixin.toml` with
+   `[mod] id = "morinume"`, HEAD hooks on `native_frame`, `native_tick`,
+   `native_hud`, `native_key`, `native_command`, `native_mods`,
+   `native_settings`, `native_settings_click`.
+2. A core module (pure logic, unit-tested on the host): module registry,
+   settings, profiles, HUD anchors, config persisted through
+   `native_setting`/`native_set_setting`.
+3. A HUD painter: dark panel with the top bar, tabs, filter chips, a 3-column,
+   paged card grid (icon = coloured block/glyph made of fills until item icons
+   are available), green/red ENABLED bar, keyboard navigation (arrows, Enter,
+   Esc, Tab), search via `/morinume search`, profiles via `/morinume profile`.
+4. CI: download the game source at the fork's commit, install horizon-mixins,
+   `apply` + `cargo check -p horizon-client`, and publish the bundle. Record
+   measured build time and the exact commit pinned.
+5. Update this file in the same commit.
